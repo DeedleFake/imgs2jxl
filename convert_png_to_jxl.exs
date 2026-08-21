@@ -4,6 +4,8 @@ defmodule ConvertPngToJxl.Stamp do
   @moduledoc false
   use GenServer
 
+  @reconnect_limit 5
+
   def start_link do
     GenServer.start_link(__MODULE__, nil, name: __MODULE__)
   end
@@ -30,38 +32,19 @@ defmodule ConvertPngToJxl.Stamp do
   @impl true
   def init(_arg) do
     Process.flag(:trap_exit, true)
-
-    case open_port() do
-      {:ok, port} -> {:ok, %{port: port, buf: ""}}
-      :error -> {:ok, %{port: nil, buf: ""}}
-    end
+    {:ok, ensure_port(%{port: nil, buf: "", crashes: 0})}
   end
 
   @impl true
-  def handle_call({:copy_times, from, to}, _from, %{port: nil} = state) do
-    {:reply, fallback_copy(from, to), state}
-  end
+  def handle_call({:copy_times, from, to}, _from, state) do
+    state = ensure_port(state)
 
-  def handle_call({:copy_times, from, to}, _from, %{port: port} = state) when is_port(port) do
-    line = quote_ps(from) <> "\t" <> quote_ps(to) <> "\n"
+    case state.port do
+      nil ->
+        {:reply, fallback_copy(from, to), state}
 
-    if Port.command(port, line) do
-      case await_reply(port, state.buf) do
-        {:ok, reply, buf} ->
-          case parse_reply(reply) do
-            :ok ->
-              {:reply, :ok, %{state | buf: buf}}
-
-            {:error, _} ->
-              {:reply, fallback_copy(from, to), %{state | buf: buf}}
-          end
-
-        {:error, _} ->
-          close_port(port)
-          {:reply, fallback_copy(from, to), %{state | port: nil, buf: ""}}
-      end
-    else
-      {:reply, fallback_copy(from, to), %{state | port: nil, buf: ""}}
+      port ->
+        stamp_via_port(port, from, to, state)
     end
   end
 
@@ -71,11 +54,11 @@ defmodule ConvertPngToJxl.Stamp do
   end
 
   def handle_info({port, {:exit_status, _}}, %{port: port} = state) do
-    {:noreply, %{state | port: nil, buf: ""}}
+    {:noreply, drop_dead_port(state)}
   end
 
   def handle_info({:EXIT, port, _}, %{port: port} = state) do
-    {:noreply, %{state | port: nil, buf: ""}}
+    {:noreply, drop_dead_port(state)}
   end
 
   def handle_info(_msg, state), do: {:noreply, state}
@@ -88,10 +71,58 @@ defmodule ConvertPngToJxl.Stamp do
 
   def terminate(_reason, _state), do: :ok
 
+  defp stamp_via_port(port, from, to, state) do
+    buf = discard_complete_lines(state.buf)
+    line = quote_ps(from) <> "\t" <> quote_ps(to) <> "\n"
+
+    if Port.command(port, line) do
+      case await_reply(port, buf) do
+        {:ok, reply, buf} ->
+          case parse_reply(reply) do
+            :ok ->
+              {:reply, :ok, %{state | buf: buf, crashes: 0}}
+
+            {:error, _} ->
+              {:reply, fallback_copy(from, to), %{state | buf: buf}}
+          end
+
+        {:error, _} ->
+          close_port(port)
+          {:reply, fallback_copy(from, to), drop_dead_port(state)}
+      end
+    else
+      close_port(port)
+      {:reply, fallback_copy(from, to), drop_dead_port(state)}
+    end
+  end
+
+  defp ensure_port(%{port: port} = state) when is_port(port), do: state
+
+  defp ensure_port(%{crashes: n} = state) when n >= @reconnect_limit do
+    %{state | port: nil}
+  end
+
+  defp ensure_port(state) do
+    case open_port() do
+      {:ok, port} ->
+        %{state | port: port, buf: ""}
+
+      :not_found ->
+        %{state | port: nil, crashes: @reconnect_limit}
+
+      :error ->
+        %{state | port: nil, crashes: state.crashes + 1}
+    end
+  end
+
+  defp drop_dead_port(state) do
+    %{state | port: nil, buf: "", crashes: state.crashes + 1}
+  end
+
   defp open_port do
     case find_powershell() do
       nil ->
-        :error
+        :not_found
 
       exe ->
         try do
@@ -101,7 +132,7 @@ defmodule ConvertPngToJxl.Stamp do
               :exit_status,
               :hide,
               :use_stdio,
-              args: ["-NoProfile", "-Command", ps_command()]
+              args: ["-NoProfile", "-NoLogo", "-NonInteractive", "-Command", ps_command()]
             ])
 
           {:ok, port}
@@ -140,29 +171,35 @@ defmodule ConvertPngToJxl.Stamp do
   defp ps_command do
     ~S"""
     $ErrorActionPreference = 'Continue'
-    [Console]::InputEncoding = New-Object System.Text.UTF8Encoding $false
-    [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+    $utf8 = New-Object System.Text.UTF8Encoding $false
+    [Console]::OutputEncoding = $utf8
+    $stdin = New-Object IO.StreamReader([Console]::OpenStandardInput(), $utf8)
     function Decode-Path([string]$p) {
       if ($p.Length -ge 2 -and $p.StartsWith("'") -and $p.EndsWith("'")) {
         return $p.Substring(1, $p.Length - 2).Replace("''", "'")
       }
       return $p
     }
+    function Write-Reply([string]$text) {
+      [Console]::Out.WriteLine($text)
+      [Console]::Out.Flush()
+    }
     while ($true) {
-      $line = [Console]::In.ReadLine()
+      $line = $stdin.ReadLine()
       if ($null -eq $line) { break }
       try {
         $idx = $line.IndexOf([char]9)
-        if ($idx -lt 0) { Write-Output 'ERR bad line'; continue }
+        if ($idx -lt 0) { Write-Reply 'ERR bad line'; continue }
         $from = Decode-Path $line.Substring(0, $idx)
         $to = Decode-Path $line.Substring($idx + 1)
         $src = Get-Item -LiteralPath $from
         $dst = Get-Item -LiteralPath $to
         $dst.CreationTimeUtc = $src.CreationTimeUtc
         $dst.LastWriteTimeUtc = $src.LastWriteTimeUtc
-        Write-Output 'OK'
+        Write-Reply 'OK'
       } catch {
-        Write-Output ('ERR ' + $_.Exception.Message)
+        $msg = ([string]$_.Exception.Message) -replace '[\r\n]+', ' '
+        Write-Reply ('ERR ' + $msg)
       }
     }
     """
@@ -186,29 +223,41 @@ defmodule ConvertPngToJxl.Stamp do
   end
 
   defp await_reply(port, buf, deadline) do
-    now = System.monotonic_time(:millisecond)
-    wait = max(deadline - now, 0)
+    case take_line(buf) do
+      {:ok, "", rest} ->
+        await_reply(port, rest, deadline)
 
-    if wait == 0 do
-      {:error, :timeout}
-    else
-      receive do
-        {^port, {:data, data}} ->
-          case take_line(buf <> data) do
-            {:ok, "", rest} -> await_reply(port, rest, deadline)
-            {:ok, line, rest} -> {:ok, line, rest}
-            :incomplete -> await_reply(port, buf <> data, deadline)
-          end
+      {:ok, line, rest} ->
+        {:ok, line, rest}
 
-        {^port, {:exit_status, status}} ->
-          {:error, {:exit_status, status}}
+      :incomplete ->
+        now = System.monotonic_time(:millisecond)
+        wait = max(deadline - now, 0)
 
-        {:EXIT, ^port, reason} ->
-          {:error, reason}
-      after
-        wait ->
+        if wait == 0 do
           {:error, :timeout}
-      end
+        else
+          receive do
+            {^port, {:data, data}} ->
+              await_reply(port, buf <> data, deadline)
+
+            {^port, {:exit_status, status}} ->
+              {:error, {:exit_status, status}}
+
+            {:EXIT, ^port, reason} ->
+              {:error, reason}
+          after
+            wait ->
+              {:error, :timeout}
+          end
+        end
+    end
+  end
+
+  defp discard_complete_lines(buf) do
+    case take_line(buf) do
+      {:ok, _line, rest} -> discard_complete_lines(rest)
+      :incomplete -> buf
     end
   end
 
@@ -236,6 +285,7 @@ defmodule ConvertPngToJxl do
   alias ConvertPngToJxl.Stamp
 
   @stats __MODULE__.Stats
+  @log __MODULE__.Log
   @log_name "convert-png-to-jxl.log"
   @gib 1_073_741_824
   @stop_key {__MODULE__, :stop}
@@ -289,18 +339,12 @@ defmodule ConvertPngToJxl do
     {:ok, _} =
       Agent.start_link(
         fn ->
-          %{
-            log_path: log_path,
-            converted: 0,
-            failed: 0,
-            skipped: 0,
-            bytes_in: 0,
-            bytes_out: 0
-          }
+          %{converted: 0, failed: 0, skipped: 0, bytes_in: 0, bytes_out: 0}
         end,
         name: @stats
       )
 
+    {:ok, _} = Agent.start_link(fn -> log_path end, name: @log)
     {:ok, _} = Stamp.start_link()
 
     {empty_count, pngs} = scan_folder(folder)
@@ -429,10 +473,13 @@ defmodule ConvertPngToJxl do
     end
   end
 
-  defp resolve_folder(nil, script_dir), do: resolve_folder(Path.dirname(script_dir), script_dir)
-
-  defp resolve_folder(path, _script_dir) do
-    folder = Path.expand(path)
+  defp resolve_folder(path, script_dir) do
+    folder =
+      if blank_path?(path) do
+        Path.dirname(script_dir)
+      else
+        Path.expand(path)
+      end
 
     case File.stat(folder) do
       {:ok, %{type: :directory}} -> folder
@@ -440,6 +487,10 @@ defmodule ConvertPngToJxl do
       {:error, _} -> die("Path not found: #{folder}")
     end
   end
+
+  defp blank_path?(path) when path in [nil, ""], do: true
+  defp blank_path?(path) when is_binary(path), do: String.trim(path) == ""
+  defp blank_path?(_), do: true
 
   defp scan_folder(folder) do
     {empty, pngs} =
@@ -482,8 +533,11 @@ defmodule ConvertPngToJxl do
 
           case verify_jxl(dest, jxlinfo) do
             :ok ->
-              _ = Stamp.copy_times(path, dest)
-              unless keep_originals, do: File.rm(path)
+              case Stamp.copy_times(path, dest) do
+                :ok -> unless keep_originals, do: File.rm(path)
+                {:error, _} -> :ok
+              end
+
               {:cont, {already + 1, work}}
 
             {:error, _} ->
@@ -501,6 +555,8 @@ defmodule ConvertPngToJxl do
 
     job =
       Task.async(fn ->
+        Process.flag(:trap_exit, true)
+
         Task.async_stream(
           work,
           fn png -> convert_one(png, ctx) end,
@@ -687,16 +743,20 @@ defmodule ConvertPngToJxl do
   end
 
   defp bump(field, bytes_in \\ 0, bytes_out \\ 0) do
-    Agent.update(@stats, fn s ->
-      %{
-        s
-        | converted: s.converted + if(field == :converted, do: 1, else: 0),
-          failed: s.failed + if(field == :failed, do: 1, else: 0),
-          skipped: s.skipped + if(field == :skipped, do: 1, else: 0),
-          bytes_in: s.bytes_in + bytes_in,
-          bytes_out: s.bytes_out + bytes_out
-      }
-    end)
+    try do
+      Agent.update(@stats, fn s ->
+        %{
+          s
+          | converted: s.converted + if(field == :converted, do: 1, else: 0),
+            failed: s.failed + if(field == :failed, do: 1, else: 0),
+            skipped: s.skipped + if(field == :skipped, do: 1, else: 0),
+            bytes_in: s.bytes_in + bytes_in,
+            bytes_out: s.bytes_out + bytes_out
+        }
+      end)
+    catch
+      :exit, _ -> :ok
+    end
   end
 
   defp emit(line) do
@@ -705,25 +765,27 @@ defmodule ConvertPngToJxl do
   end
 
   defp log(line) do
-    case Process.whereis(@stats) do
-      nil ->
-        :ok
+    try do
+      Agent.update(@log, fn path ->
+        try do
+          _ = File.write(path, [line, ?\n], [:append])
+        rescue
+          _ -> :ok
+        end
 
-      _pid ->
-        Agent.update(@stats, fn s ->
-          File.write!(s.log_path, [line, ?\n], [:append])
-          s
-        end)
+        path
+      end)
+    catch
+      :exit, _ -> :ok
     end
   end
 
   defp snapshot do
-    case Process.whereis(@stats) do
-      nil ->
+    try do
+      Agent.get(@stats, & &1)
+    catch
+      :exit, _ ->
         %{converted: 0, failed: 0, skipped: 0, bytes_in: 0, bytes_out: 0}
-
-      _pid ->
-        Agent.get(@stats, & &1)
     end
   end
 
@@ -810,23 +872,20 @@ defmodule ConvertPngToJxl do
   end
 
   defp halt!(code) do
-    if pid = Process.whereis(Stamp) do
-      try do
-        GenServer.stop(pid, :normal, 5_000)
-      catch
-        :exit, _ -> :ok
-      end
-    end
-
-    if pid = Process.whereis(@stats) do
-      try do
-        Agent.stop(pid)
-      catch
-        :exit, _ -> :ok
-      end
-    end
-
+    stop_named(Stamp, fn pid -> GenServer.stop(pid, :normal, 5_000) end)
+    stop_named(@stats, &Agent.stop/1)
+    stop_named(@log, &Agent.stop/1)
     System.halt(code)
+  end
+
+  defp stop_named(name, fun) do
+    if pid = Process.whereis(name) do
+      try do
+        fun.(pid)
+      catch
+        :exit, _ -> :ok
+      end
+    end
   end
 end
 
