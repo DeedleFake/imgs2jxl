@@ -17,7 +17,7 @@ import (
 func main() {
 	cfg := png2jxl.DefaultConfig()
 	skipSec := int(cfg.SkipNewerThan / time.Second)
-	flag.StringVar(&cfg.Path, "path", cfg.Path, "directory of PNG files")
+	flag.StringVar(&cfg.Path, "path", cfg.Path, "directory of PNG files (default cwd)")
 	flag.IntVar(&cfg.Effort, "effort", cfg.Effort, "cjxl -e, 1 to 10")
 	flag.Float64Var(&cfg.Distance, "distance", cfg.Distance, "cjxl -d, 0 to 25")
 	flag.BoolVar(&cfg.Lossless, "lossless", false, "force -d 0")

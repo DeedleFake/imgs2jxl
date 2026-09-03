@@ -103,50 +103,7 @@ func lookTools() (tools, error) {
 }
 
 func defaultFolder() (string, error) {
-	cwd, cwdErr := os.Getwd()
-	exe, err := os.Executable()
-	if err != nil {
-		if cwdErr != nil {
-			return "", err
-		}
-		return cwd, nil
-	}
-	exeDir := filepath.Dir(exe)
-	if inTempTree(exeDir) {
-		if cwdErr != nil {
-			return "", cwdErr
-		}
-		return filepath.Dir(cwd), nil
-	}
-	return filepath.Dir(exeDir), nil
-}
-
-func inTempTree(dir string) bool {
-	tmp := os.TempDir()
-	dirAbs, err := filepath.Abs(dir)
-	if err != nil {
-		dirAbs = dir
-	}
-	tmpAbs, err := filepath.Abs(tmp)
-	if err != nil {
-		tmpAbs = tmp
-	}
-	if resolved, err := filepath.EvalSymlinks(dirAbs); err == nil {
-		dirAbs = resolved
-	}
-	if resolved, err := filepath.EvalSymlinks(tmpAbs); err == nil {
-		tmpAbs = resolved
-	}
-	dirAbs = filepath.Clean(dirAbs)
-	tmpAbs = filepath.Clean(tmpAbs)
-	if dirAbs == tmpAbs {
-		return true
-	}
-	prefix := tmpAbs
-	if !strings.HasSuffix(prefix, string(os.PathSeparator)) {
-		prefix += string(os.PathSeparator)
-	}
-	return strings.HasPrefix(dirAbs, prefix)
+	return os.Getwd()
 }
 
 func resolveFolder(path string) (string, error) {

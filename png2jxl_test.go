@@ -359,6 +359,23 @@ func TestEmptyDirNotError(t *testing.T) {
 	}
 }
 
+func TestEmptyPathUsesCwd(t *testing.T) {
+	requireTools(t)
+	dir := t.TempDir()
+	t.Chdir(dir)
+	cfg := testCfg(dir)
+	cfg.Path = ""
+	mustRun(t, cfg)
+	want, err := filepath.Abs(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := readLog(t, want)
+	if !strings.Contains(log, "folder="+want) {
+		t.Fatalf("log %q want folder=%s", log, want)
+	}
+}
+
 func TestInventory(t *testing.T) {
 	dir := t.TempDir()
 	writeSyntheticPNG(t, filepath.Join(dir, "b.png"))
