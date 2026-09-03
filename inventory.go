@@ -1,4 +1,4 @@
-package png2jxl
+package imgs2jxl
 
 import (
 	"fmt"
@@ -9,40 +9,40 @@ import (
 	"time"
 )
 
-type png struct {
+type img struct {
 	path  string
 	name  string
 	size  int64
 	mtime time.Time
 }
 
-func (p png) destPath() string {
+func (p img) destPath() string {
 	return strings.TrimSuffix(p.path, filepath.Ext(p.path)) + ".jxl"
 }
 
-func (p png) partialPath() string {
+func (p img) partialPath() string {
 	return p.destPath() + ".partial"
 }
 
-func (p png) tooRecent(now time.Time, d time.Duration) bool {
+func (p img) tooRecent(now time.Time, d time.Duration) bool {
 	if d <= 0 {
 		return false
 	}
 	return now.Sub(p.mtime) < d
 }
 
-func observePNG(path string) (png, error) {
+func observeImg(path string) (img, error) {
 	fi, err := os.Stat(path)
 	if err != nil {
-		return png{}, err
+		return img{}, err
 	}
 	if !fi.Mode().IsRegular() {
-		return png{}, fmt.Errorf("not a regular file: %s", path)
+		return img{}, fmt.Errorf("not a regular file: %s", path)
 	}
 	if fi.Size() <= 0 {
-		return png{}, fmt.Errorf("empty png: %s", path)
+		return img{}, fmt.Errorf("empty image: %s", path)
 	}
-	return png{
+	return img{
 		path:  path,
 		name:  filepath.Base(path),
 		size:  fi.Size(),
@@ -50,7 +50,7 @@ func observePNG(path string) (png, error) {
 	}, nil
 }
 
-func inventory(dir string) (empty int, pngs []png, err error) {
+func inventory(dir string) (empty int, imgs []img, err error) {
 	ents, err := os.ReadDir(dir)
 	if err != nil {
 		return 0, nil, err
@@ -71,13 +71,13 @@ func inventory(dir string) (empty int, pngs []png, err error) {
 				empty++
 				continue
 			}
-			p, obsErr := observePNG(path)
+			p, obsErr := observeImg(path)
 			if obsErr != nil {
 				continue
 			}
-			pngs = append(pngs, p)
+			imgs = append(imgs, p)
 		}
 	}
-	sort.Slice(pngs, func(i, j int) bool { return pngs[i].name < pngs[j].name })
-	return empty, pngs, nil
+	sort.Slice(imgs, func(i, j int) bool { return imgs[i].name < imgs[j].name })
+	return empty, imgs, nil
 }

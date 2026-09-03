@@ -1,6 +1,6 @@
 //go:build windows
 
-package png2jxl
+package imgs2jxl
 
 import (
 	"golang.org/x/sys/windows"

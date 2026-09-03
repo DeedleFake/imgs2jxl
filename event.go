@@ -1,4 +1,4 @@
-package png2jxl
+package imgs2jxl
 
 import (
 	"fmt"
@@ -121,7 +121,7 @@ func writeHeader(w io.Writer, cfg Config, folder string, pending, alreadyHad, em
 		keep = "True"
 	}
 	lines := []string{
-		fmt.Sprintf("=== %s convert PNG -> JXL ===", stamp),
+		fmt.Sprintf("=== %s convert -> JXL ===", stamp),
 		"folder=" + folder,
 		fmt.Sprintf("mode=%s workers=%d keepOriginals=%s", mode, cfg.Workers, keep),
 		fmt.Sprintf("pending=%d alreadyHadJxl=%d emptyPngsLeftAlone=%d", pending, alreadyHad, empty),

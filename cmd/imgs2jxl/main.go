@@ -12,13 +12,13 @@ import (
 	"syscall"
 	"time"
 
-	"png2jxl"
+	"imgs2jxl"
 )
 
 func main() {
-	cfg := png2jxl.DefaultConfig()
+	cfg := imgs2jxl.DefaultConfig()
 	skipSec := int(cfg.SkipNewerThan / time.Second)
-	flag.StringVar(&cfg.Path, "path", cfg.Path, "directory of PNG files (default cwd)")
+	flag.StringVar(&cfg.Path, "path", cfg.Path, "directory of image files (default cwd)")
 	flag.Func("effort", "cjxl -e, 1 to 10", func(s string) error {
 		v, err := strconv.Atoi(s)
 		if err != nil {
@@ -57,8 +57,8 @@ func main() {
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	if err := png2jxl.Run(ctx, cfg); err != nil {
-		var failed png2jxl.FailedError
+	if err := imgs2jxl.Run(ctx, cfg); err != nil {
+		var failed imgs2jxl.FailedError
 		if errors.As(err, &failed) {
 			os.Exit(1)
 		}

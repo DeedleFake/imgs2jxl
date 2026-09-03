@@ -1,4 +1,4 @@
-package png2jxl
+package imgs2jxl
 
 import (
 	"bytes"
@@ -289,8 +289,8 @@ func TestConcurrentPNGs(t *testing.T) {
 }
 
 func TestWindowsCrossCompile(t *testing.T) {
-	out := filepath.Join(t.TempDir(), "png2jxl.exe")
-	cmd := exec.Command("go", "build", "-o", out, "./cmd/png2jxl")
+	out := filepath.Join(t.TempDir(), "imgs2jxl.exe")
+	cmd := exec.Command("go", "build", "-o", out, "./cmd/imgs2jxl")
 	cmd.Env = append(os.Environ(), "GOOS=windows", "GOARCH=amd64", "CGO_ENABLED=0")
 	b, err := cmd.CombinedOutput()
 	if err != nil {
@@ -393,24 +393,24 @@ func TestInventory(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "Y.JXL.PARTIAL"), []byte("y"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	empty, pngs, err := inventory(dir)
+	empty, imgs, err := inventory(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if empty != 1 {
 		t.Fatalf("empty %d", empty)
 	}
-	if len(pngs) != 3 || pngs[0].name != "C.PNG" || pngs[1].name != "a.png" || pngs[2].name != "b.png" {
-		t.Fatalf("%v", namesOf(pngs))
+	if len(imgs) != 3 || imgs[0].name != "C.PNG" || imgs[1].name != "a.png" || imgs[2].name != "b.png" {
+		t.Fatalf("%v", namesOf(imgs))
 	}
 	if exists(filepath.Join(dir, "x.jxl.partial")) || exists(filepath.Join(dir, "Y.JXL.PARTIAL")) {
 		t.Fatal("partial remains")
 	}
 }
 
-func namesOf(pngs []png) []string {
-	out := make([]string, len(pngs))
-	for i, p := range pngs {
+func namesOf(imgs []img) []string {
+	out := make([]string, len(imgs))
+	for i, p := range imgs {
 		out[i] = p.name
 	}
 	return out

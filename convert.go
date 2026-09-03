@@ -1,4 +1,4 @@
-package png2jxl
+package imgs2jxl
 
 import (
 	"context"
@@ -10,27 +10,27 @@ import (
 	"time"
 )
 
-type needsEncode struct{ png png }
+type needsEncode struct{ img img }
 
-type verifiedPartial struct{ png png }
+type verifiedPartial struct{ img img }
 
-type finalJXL struct{ png png }
+type finalJXL struct{ img img }
 
-type stampedJXL struct{ png png }
+type stampedJXL struct{ img img }
 
 var copyTimesFn = copyTimes
 
-func adoptExisting(p png, t tools) (finalJXL, bool) {
+func adoptExisting(p img, t tools) (finalJXL, bool) {
 	if err := verifyJXL(p.destPath(), t.jxlinfo); err != nil {
 		return finalJXL{}, false
 	}
-	return finalJXL{png: p}, true
+	return finalJXL{img: p}, true
 }
 
 func (n needsEncode) encode(t tools, cfg Config) (verifiedPartial, error) {
-	partial := n.png.partialPath()
+	partial := n.img.partialPath()
 	_ = os.Remove(partial)
-	args := append([]string{n.png.path, partial}, cjxlFlags(cfg)...)
+	args := append([]string{n.img.path, partial}, cjxlFlags(cfg)...)
 	cmd := exec.Command(t.cjxl, args...)
 	out, err := cmd.CombinedOutput()
 	vErr := verifyJXL(partial, t.jxlinfo)
@@ -38,25 +38,25 @@ func (n needsEncode) encode(t tools, cfg Config) (verifiedPartial, error) {
 		_ = os.Remove(partial)
 		return verifiedPartial{}, errors.New(failDetail(out, err, vErr))
 	}
-	return verifiedPartial{png: n.png}, nil
+	return verifiedPartial{img: n.img}, nil
 }
 
 func (v verifiedPartial) renameToFinal() (finalJXL, error) {
-	if err := replaceFile(v.png.partialPath(), v.png.destPath()); err != nil {
+	if err := replaceFile(v.img.partialPath(), v.img.destPath()); err != nil {
 		return finalJXL{}, err
 	}
-	return finalJXL{png: v.png}, nil
+	return finalJXL{img: v.img}, nil
 }
 
 func (f finalJXL) stamp() (stampedJXL, error) {
-	if err := copyTimesFn(f.png.path, f.png.destPath()); err != nil {
+	if err := copyTimesFn(f.img.path, f.img.destPath()); err != nil {
 		return stampedJXL{}, err
 	}
-	return stampedJXL{png: f.png}, nil
+	return stampedJXL{img: f.img}, nil
 }
 
-func (s stampedJXL) removePNG() error {
-	return os.Remove(s.png.path)
+func (s stampedJXL) removeImg() error {
+	return os.Remove(s.img.path)
 }
 
 func applyStamp(f finalJXL, keepOriginals bool) error {
@@ -67,14 +67,14 @@ func applyStamp(f finalJXL, keepOriginals bool) error {
 	if keepOriginals {
 		return nil
 	}
-	return s.removePNG()
+	return s.removeImg()
 }
 
-func convertOne(ctx context.Context, p png, cfg Config, t tools, now time.Time) event {
+func convertOne(ctx context.Context, p img, cfg Config, t tools, now time.Time) event {
 	if ctx.Err() != nil {
 		return nil
 	}
-	cur, err := observePNG(p.path)
+	cur, err := observeImg(p.path)
 	if err != nil {
 		return failed{name: p.name, detail: err.Error()}
 	}
@@ -84,7 +84,7 @@ func convertOne(ctx context.Context, p png, cfg Config, t tools, now time.Time) 
 	if f, ok := adoptExisting(cur, t); ok {
 		return finishFinal(f, cfg, true)
 	}
-	v, err := (needsEncode{png: cur}).encode(t, cfg)
+	v, err := (needsEncode{img: cur}).encode(t, cfg)
 	if err != nil {
 		return failed{name: cur.name, detail: err.Error()}
 	}
@@ -97,13 +97,13 @@ func convertOne(ctx context.Context, p png, cfg Config, t tools, now time.Time) 
 
 func finishFinal(f finalJXL, cfg Config, existing bool) event {
 	if err := applyStamp(f, cfg.KeepOriginals); err != nil {
-		return failed{name: f.png.name, detail: err.Error()}
+		return failed{name: f.img.name, detail: err.Error()}
 	}
-	out := fileSize(f.png.destPath())
+	out := fileSize(f.img.destPath())
 	if existing {
-		return already{name: f.png.name, bytesIn: f.png.size, bytesOut: out}
+		return already{name: f.img.name, bytesIn: f.img.size, bytesOut: out}
 	}
-	return converted{name: f.png.name, bytesIn: f.png.size, bytesOut: out}
+	return converted{name: f.img.name, bytesIn: f.img.size, bytesOut: out}
 }
 
 func fileSize(path string) int64 {

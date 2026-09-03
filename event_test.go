@@ -1,4 +1,4 @@
-package png2jxl
+package imgs2jxl
 
 import (
 	"bytes"
@@ -51,7 +51,7 @@ func TestWriteHeader(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := b.String()
-	if !strings.Contains(s, " convert PNG -> JXL ===") {
+	if !strings.Contains(s, " convert -> JXL ===") {
 		t.Fatal(s)
 	}
 	if !strings.Contains(s, "folder=/tmp/x") {

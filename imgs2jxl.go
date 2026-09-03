@@ -1,4 +1,4 @@
-package png2jxl
+package imgs2jxl
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	logName             = "convert-png-to-jxl.log"
+	logName             = "imgs2jxl.log"
 	minValidJXLSize     = 32
 	maxEffort           = 10
 	minEffort           = 1
@@ -138,7 +138,7 @@ func resolveFolder(path string) (string, error) {
 	return path, nil
 }
 
-// Run converts non-empty *.png files in cfg.Path to JPEG XL.
+// Run converts non-empty image files in cfg.Path to JPEG XL.
 func Run(ctx context.Context, cfg Config) error {
 	if err := cfg.validate(); err != nil {
 		return err
@@ -151,13 +151,13 @@ func Run(ctx context.Context, cfg Config) error {
 	if err != nil {
 		return err
 	}
-	empty, pngs, err := inventory(folder)
+	empty, imgs, err := inventory(folder)
 	if err != nil {
 		return err
 	}
 	already := 0
-	work := make([]png, 0, len(pngs))
-	for _, p := range pngs {
+	work := make([]img, 0, len(imgs))
+	for _, p := range imgs {
 		if ctx.Err() != nil {
 			break
 		}
@@ -201,14 +201,14 @@ func Run(ctx context.Context, cfg Config) error {
 	return ctx.Err()
 }
 
-func runWorkers(ctx context.Context, n int, jobs []png, events chan<- event, cfg Config, t tools) {
+func runWorkers(ctx context.Context, n int, jobs []img, events chan<- event, cfg Config, t tools) {
 	if n > len(jobs) {
 		n = len(jobs)
 	}
 	if n < 1 {
 		n = 1
 	}
-	ch := make(chan png)
+	ch := make(chan img)
 	var wg sync.WaitGroup
 	wg.Add(n)
 	for i := 0; i < n; i++ {

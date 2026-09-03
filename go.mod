@@ -1,4 +1,4 @@
-module png2jxl
+module imgs2jxl
 
 go 1.25.0
 
