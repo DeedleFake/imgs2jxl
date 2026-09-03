@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -27,11 +28,11 @@ const (
 // Config is the public input to Run. Numeric ranges are enforced by validate.
 type Config struct {
 	Path             string
-	Effort           int
-	Distance         float64
+	Effort           *int
+	Distance         *float64
 	Lossless         bool
 	Workers          int
-	ThreadsPerWorker int
+	ThreadsPerWorker *int
 	KeepOriginals    bool
 	Limit            int
 	SkipNewerThan    time.Duration
@@ -39,11 +40,8 @@ type Config struct {
 
 func DefaultConfig() Config {
 	return Config{
-		Effort:           7,
-		Distance:         1.0,
-		Workers:          8,
-		ThreadsPerWorker: 3,
-		SkipNewerThan:    30 * time.Second,
+		Workers:       8,
+		SkipNewerThan: 30 * time.Second,
 	}
 }
 
@@ -57,16 +55,16 @@ func (e FailedError) Error() string {
 }
 
 func (c Config) validate() error {
-	if c.Effort < minEffort || c.Effort > maxEffort {
+	if c.Effort != nil && (*c.Effort < minEffort || *c.Effort > maxEffort) {
 		return fmt.Errorf("--effort must be in %d..%d", minEffort, maxEffort)
 	}
-	if c.Distance < 0 || c.Distance > maxDistance {
+	if c.Distance != nil && (*c.Distance < 0 || *c.Distance > maxDistance) {
 		return errors.New("--distance must be in 0..25")
 	}
 	if c.Workers < minWorkers || c.Workers > maxWorkers {
 		return fmt.Errorf("--workers must be in %d..%d", minWorkers, maxWorkers)
 	}
-	if c.ThreadsPerWorker < 0 || c.ThreadsPerWorker > maxThreadsPerWorker {
+	if c.ThreadsPerWorker != nil && (*c.ThreadsPerWorker < 0 || *c.ThreadsPerWorker > maxThreadsPerWorker) {
 		return fmt.Errorf("--threads-per-worker must be in 0..%d", maxThreadsPerWorker)
 	}
 	if c.Limit < 0 {
@@ -78,11 +76,20 @@ func (c Config) validate() error {
 	return nil
 }
 
-func (c Config) distance() float64 {
-	if c.Lossless {
-		return 0
+func cjxlFlags(cfg Config) []string {
+	var flags []string
+	if cfg.Lossless {
+		flags = append(flags, "-d", "0")
+	} else if cfg.Distance != nil {
+		flags = append(flags, "-d", strconv.FormatFloat(*cfg.Distance, 'g', -1, 64))
 	}
-	return c.Distance
+	if cfg.Effort != nil {
+		flags = append(flags, "-e", strconv.Itoa(*cfg.Effort))
+	}
+	if cfg.ThreadsPerWorker != nil {
+		flags = append(flags, "--num_threads", strconv.Itoa(*cfg.ThreadsPerWorker))
+	}
+	return append(flags, "--quiet")
 }
 
 type tools struct {

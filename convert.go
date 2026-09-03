@@ -6,16 +6,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"strings"
 	"time"
 )
-
-type encodeOpts struct {
-	distance float64
-	effort   int
-	threads  int
-}
 
 type needsEncode struct{ png png }
 
@@ -34,17 +27,11 @@ func adoptExisting(p png, t tools) (finalJXL, bool) {
 	return finalJXL{png: p}, true
 }
 
-func (n needsEncode) encode(t tools, opt encodeOpts) (verifiedPartial, error) {
+func (n needsEncode) encode(t tools, cfg Config) (verifiedPartial, error) {
 	partial := n.png.partialPath()
 	_ = os.Remove(partial)
-	cmd := exec.Command(t.cjxl,
-		n.png.path,
-		partial,
-		"-d", formatDistance(opt.distance),
-		"-e", strconv.Itoa(opt.effort),
-		"--num_threads", strconv.Itoa(opt.threads),
-		"--quiet",
-	)
+	args := append([]string{n.png.path, partial}, cjxlFlags(cfg)...)
+	cmd := exec.Command(t.cjxl, args...)
 	out, err := cmd.CombinedOutput()
 	vErr := verifyJXL(partial, t.jxlinfo)
 	if err != nil || vErr != nil {
@@ -97,11 +84,7 @@ func convertOne(ctx context.Context, p png, cfg Config, t tools, now time.Time) 
 	if f, ok := adoptExisting(cur, t); ok {
 		return finishFinal(f, cfg, true)
 	}
-	v, err := (needsEncode{png: cur}).encode(t, encodeOpts{
-		distance: cfg.distance(),
-		effort:   cfg.Effort,
-		threads:  cfg.ThreadsPerWorker,
-	})
+	v, err := (needsEncode{png: cur}).encode(t, cfg)
 	if err != nil {
 		return failed{name: cur.name, detail: err.Error()}
 	}
@@ -214,8 +197,4 @@ func oneLine(s string) string {
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = strings.ReplaceAll(s, "\r", " ")
 	return strings.TrimSpace(s)
-}
-
-func formatDistance(d float64) string {
-	return strconv.FormatFloat(d, 'g', -1, 64)
 }

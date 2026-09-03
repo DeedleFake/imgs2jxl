@@ -57,7 +57,10 @@ func TestWriteHeader(t *testing.T) {
 	if !strings.Contains(s, "folder=/tmp/x") {
 		t.Fatal(s)
 	}
-	if !strings.Contains(s, "mode=visually-lossy -d 1 -e 7 workers=8 threads/worker=3 keepOriginals=False") {
+	if !strings.Contains(s, "mode=cjxl workers=8 keepOriginals=False") {
+		t.Fatal(s)
+	}
+	if strings.Contains(s, "-e ") || strings.Contains(s, "threads/worker=") {
 		t.Fatal(s)
 	}
 	if !strings.Contains(s, "pending=3 alreadyHadJxl=2 emptyPngsLeftAlone=1") {
@@ -70,7 +73,19 @@ func TestWriteHeader(t *testing.T) {
 		t.Fatal(err)
 	}
 	s = b.String()
-	if !strings.Contains(s, "mode=lossless -d 0 -e 7 workers=8 threads/worker=3 keepOriginals=True") {
+	if !strings.Contains(s, "mode=-d 0 workers=8 keepOriginals=True") {
+		t.Fatal(s)
+	}
+	b.Reset()
+	cfg = DefaultConfig()
+	cfg.Effort = ptr(7)
+	cfg.Distance = ptr(1.0)
+	cfg.ThreadsPerWorker = ptr(3)
+	if err := writeHeader(&b, cfg, "/tmp/x", 0, 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	s = b.String()
+	if !strings.Contains(s, "mode=-d 1 -e 7 --num_threads 3 workers=8 keepOriginals=False") {
 		t.Fatal(s)
 	}
 }

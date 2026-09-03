@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -24,12 +25,14 @@ func requireTools(t *testing.T) tools {
 	return tl
 }
 
+func ptr[T any](v T) *T { return &v }
+
 func testCfg(dir string) Config {
 	cfg := DefaultConfig()
 	cfg.Path = dir
-	cfg.Effort = 1
+	cfg.Effort = ptr(1)
 	cfg.Workers = 1
-	cfg.ThreadsPerWorker = 1
+	cfg.ThreadsPerWorker = ptr(1)
 	cfg.SkipNewerThan = 0
 	return cfg
 }
@@ -415,7 +418,7 @@ func namesOf(pngs []png) []string {
 
 func TestDefaultConfig(t *testing.T) {
 	c := DefaultConfig()
-	if c.Effort != 7 || c.Distance != 1.0 || c.Workers != 8 || c.ThreadsPerWorker != 3 || c.SkipNewerThan != 30*time.Second {
+	if c.Effort != nil || c.Distance != nil || c.ThreadsPerWorker != nil || c.Workers != 8 || c.SkipNewerThan != 30*time.Second {
 		t.Fatalf("%+v", c)
 	}
 }
@@ -423,9 +426,46 @@ func TestDefaultConfig(t *testing.T) {
 func TestValidateRejectsEffort(t *testing.T) {
 	c := DefaultConfig()
 	c.Path = t.TempDir()
-	c.Effort = 0
+	c.Effort = ptr(0)
 	if err := Run(context.Background(), c); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func TestCjxlFlags(t *testing.T) {
+	tests := []struct {
+		name string
+		cfg  Config
+		want []string
+	}{
+		{name: "unset", cfg: Config{}, want: []string{"--quiet"}},
+		{name: "effort", cfg: Config{Effort: ptr(7)}, want: []string{"-e", "7", "--quiet"}},
+		{name: "distance", cfg: Config{Distance: ptr(1.0)}, want: []string{"-d", "1", "--quiet"}},
+		{name: "distance0", cfg: Config{Distance: ptr(0.0)}, want: []string{"-d", "0", "--quiet"}},
+		{name: "threads0", cfg: Config{ThreadsPerWorker: ptr(0)}, want: []string{"--num_threads", "0", "--quiet"}},
+		{
+			name: "all",
+			cfg:  Config{Effort: ptr(7), Distance: ptr(1.25), ThreadsPerWorker: ptr(3)},
+			want: []string{"-d", "1.25", "-e", "7", "--num_threads", "3", "--quiet"},
+		},
+		{name: "lossless", cfg: Config{Lossless: true}, want: []string{"-d", "0", "--quiet"}},
+		{name: "losslessWins", cfg: Config{Lossless: true, Distance: ptr(1.0)}, want: []string{"-d", "0", "--quiet"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := cjxlFlags(tt.cfg)
+			if !slices.Equal(got, tt.want) {
+				t.Fatalf("got %q want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestCjxlFlagsNilEffortOmitsE(t *testing.T) {
+	for _, f := range cjxlFlags(DefaultConfig()) {
+		if f == "-e" {
+			t.Fatalf("flags %q", cjxlFlags(DefaultConfig()))
+		}
 	}
 }
 

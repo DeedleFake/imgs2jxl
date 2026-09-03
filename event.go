@@ -3,6 +3,7 @@ package png2jxl
 import (
 	"fmt"
 	"io"
+	"strings"
 	"time"
 )
 
@@ -105,11 +106,15 @@ func (e workerError) apply(s stats) stats {
 
 func writeHeader(w io.Writer, cfg Config, folder string, pending, alreadyHad, empty int) error {
 	stamp := time.Now().Format("2006-01-02T15:04:05")
-	var mode string
-	if cfg.Lossless {
-		mode = fmt.Sprintf("lossless -d 0 -e %d", cfg.Effort)
-	} else {
-		mode = fmt.Sprintf("visually-lossy -d %s -e %d", formatDistance(cfg.Distance), cfg.Effort)
+	var shown []string
+	for _, f := range cjxlFlags(cfg) {
+		if f != "--quiet" {
+			shown = append(shown, f)
+		}
+	}
+	mode := "cjxl"
+	if len(shown) > 0 {
+		mode = strings.Join(shown, " ")
 	}
 	keep := "False"
 	if cfg.KeepOriginals {
@@ -118,7 +123,7 @@ func writeHeader(w io.Writer, cfg Config, folder string, pending, alreadyHad, em
 	lines := []string{
 		fmt.Sprintf("=== %s convert PNG -> JXL ===", stamp),
 		"folder=" + folder,
-		fmt.Sprintf("mode=%s workers=%d threads/worker=%d keepOriginals=%s", mode, cfg.Workers, cfg.ThreadsPerWorker, keep),
+		fmt.Sprintf("mode=%s workers=%d keepOriginals=%s", mode, cfg.Workers, keep),
 		fmt.Sprintf("pending=%d alreadyHadJxl=%d emptyPngsLeftAlone=%d", pending, alreadyHad, empty),
 	}
 	for _, line := range lines {
