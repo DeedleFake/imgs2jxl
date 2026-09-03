@@ -40,8 +40,8 @@ func testCfg(dir string) Config {
 func writeSyntheticPNG(t *testing.T, path string) {
 	t.Helper()
 	img := image.NewNRGBA(image.Rect(0, 0, 32, 32))
-	for y := 0; y < 32; y++ {
-		for x := 0; x < 32; x++ {
+	for y := range 32 {
+		for x := range 32 {
 			img.SetNRGBA(x, y, color.NRGBA{R: uint8(x * 8), G: uint8(y * 8), B: 200, A: 255})
 		}
 	}

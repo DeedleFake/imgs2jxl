@@ -146,10 +146,7 @@ func progressLine(s stats, elapsed time.Duration) string {
 	if elapsedS > 0 {
 		rate = float64(done) / elapsedS
 	}
-	remaining := s.Total - done
-	if remaining < 0 {
-		remaining = 0
-	}
+	remaining := max(s.Total-done, 0)
 	var eta time.Duration
 	if rate > 0 {
 		eta = time.Duration(float64(remaining) / rate * float64(time.Second))

@@ -100,11 +100,11 @@ type tools struct {
 func lookTools() (tools, error) {
 	cjxl, err := exec.LookPath("cjxl")
 	if err != nil {
-		return tools{}, errors.New("Required command 'cjxl' is not on PATH.")
+		return tools{}, errors.New("required command 'cjxl' is not on PATH")
 	}
 	jxlinfo, err := exec.LookPath("jxlinfo")
 	if err != nil {
-		return tools{}, errors.New("Required command 'jxlinfo' is not on PATH.")
+		return tools{}, errors.New("required command 'jxlinfo' is not on PATH")
 	}
 	return tools{cjxl: cjxl, jxlinfo: jxlinfo}, nil
 }
@@ -128,7 +128,7 @@ func resolveFolder(path string) (string, error) {
 	fi, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", fmt.Errorf("Path not found: %s", path)
+			return "", fmt.Errorf("path not found: %s", path)
 		}
 		return "", err
 	}

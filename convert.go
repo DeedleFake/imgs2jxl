@@ -38,21 +38,21 @@ func (n needsEncode) encode(t tools, cfg Config) (verifiedPartial, error) {
 		_ = os.Remove(partial)
 		return verifiedPartial{}, errors.New(failDetail(out, err, vErr))
 	}
-	return verifiedPartial{img: n.img}, nil
+	return verifiedPartial(n), nil
 }
 
 func (v verifiedPartial) renameToFinal() (finalJXL, error) {
 	if err := replaceFile(v.img.partialPath(), v.img.destPath()); err != nil {
 		return finalJXL{}, err
 	}
-	return finalJXL{img: v.img}, nil
+	return finalJXL(v), nil
 }
 
 func (f finalJXL) stamp() (stampedJXL, error) {
 	if err := copyTimesFn(f.img.path, f.img.destPath()); err != nil {
 		return stampedJXL{}, err
 	}
-	return stampedJXL{img: f.img}, nil
+	return stampedJXL(f), nil
 }
 
 func (s stampedJXL) removeImg() error {
