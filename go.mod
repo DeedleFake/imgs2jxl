@@ -1,4 +1,4 @@
-module imgs2jxl
+module deedles.dev/imgs2jxl
 
 go 1.25.0
 

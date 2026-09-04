@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"imgs2jxl"
+	"deedles.dev/imgs2jxl"
 )
 
 func main() {
