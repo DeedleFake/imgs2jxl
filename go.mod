@@ -1,5 +1,5 @@
 module deedles.dev/imgs2jxl
 
-go 1.25.0
+go 1.27.1
 
 require golang.org/x/sys v0.47.0
