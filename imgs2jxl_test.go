@@ -25,14 +25,12 @@ func requireTools(t *testing.T) tools {
 	return tl
 }
 
-func ptr[T any](v T) *T { return &v }
-
 func testCfg(dir string) Config {
 	cfg := DefaultConfig()
 	cfg.Path = dir
-	cfg.Effort = ptr(1)
+	cfg.Effort = new(1)
 	cfg.Workers = 1
-	cfg.ThreadsPerWorker = ptr(1)
+	cfg.ThreadsPerWorker = new(1)
 	cfg.SkipNewerThan = 0
 	return cfg
 }
@@ -426,7 +424,7 @@ func TestDefaultConfig(t *testing.T) {
 func TestValidateRejectsEffort(t *testing.T) {
 	c := DefaultConfig()
 	c.Path = t.TempDir()
-	c.Effort = ptr(0)
+	c.Effort = new(0)
 	if err := Run(context.Background(), c); err == nil {
 		t.Fatal("expected error")
 	}
@@ -439,17 +437,17 @@ func TestCjxlFlags(t *testing.T) {
 		want []string
 	}{
 		{name: "unset", cfg: Config{}, want: []string{"--quiet"}},
-		{name: "effort", cfg: Config{Effort: ptr(7)}, want: []string{"-e", "7", "--quiet"}},
-		{name: "distance", cfg: Config{Distance: ptr(1.0)}, want: []string{"-d", "1", "--quiet"}},
-		{name: "distance0", cfg: Config{Distance: ptr(0.0)}, want: []string{"-d", "0", "--quiet"}},
-		{name: "threads0", cfg: Config{ThreadsPerWorker: ptr(0)}, want: []string{"--num_threads", "0", "--quiet"}},
+		{name: "effort", cfg: Config{Effort: new(7)}, want: []string{"-e", "7", "--quiet"}},
+		{name: "distance", cfg: Config{Distance: new(1.0)}, want: []string{"-d", "1", "--quiet"}},
+		{name: "distance0", cfg: Config{Distance: new(0.0)}, want: []string{"-d", "0", "--quiet"}},
+		{name: "threads0", cfg: Config{ThreadsPerWorker: new(0)}, want: []string{"--num_threads", "0", "--quiet"}},
 		{
 			name: "all",
-			cfg:  Config{Effort: ptr(7), Distance: ptr(1.25), ThreadsPerWorker: ptr(3)},
+			cfg:  Config{Effort: new(7), Distance: new(1.25), ThreadsPerWorker: new(3)},
 			want: []string{"-d", "1.25", "-e", "7", "--num_threads", "3", "--quiet"},
 		},
 		{name: "lossless", cfg: Config{Lossless: true}, want: []string{"-d", "0", "--quiet"}},
-		{name: "losslessWins", cfg: Config{Lossless: true, Distance: ptr(1.0)}, want: []string{"-d", "0", "--quiet"}},
+		{name: "losslessWins", cfg: Config{Lossless: true, Distance: new(1.0)}, want: []string{"-d", "0", "--quiet"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
