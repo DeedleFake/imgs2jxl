@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"imgs2jxl"
+	"deedles.dev/imgs2jxl"
 )
 
 func main() {
@@ -58,8 +58,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := imgs2jxl.Run(ctx, cfg); err != nil {
-		var failed imgs2jxl.FailedError
-		if errors.As(err, &failed) {
+		if _, ok := errors.AsType[imgs2jxl.FailedError](err); ok {
 			os.Exit(1)
 		}
 		fmt.Fprintln(os.Stderr, err)

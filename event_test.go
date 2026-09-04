@@ -78,9 +78,9 @@ func TestWriteHeader(t *testing.T) {
 	}
 	b.Reset()
 	cfg = DefaultConfig()
-	cfg.Effort = ptr(7)
-	cfg.Distance = ptr(1.0)
-	cfg.ThreadsPerWorker = ptr(3)
+	cfg.Effort = new(7)
+	cfg.Distance = new(1.0)
+	cfg.ThreadsPerWorker = new(3)
 	if err := writeHeader(&b, cfg, "/tmp/x", 0, 0, 0); err != nil {
 		t.Fatal(err)
 	}
